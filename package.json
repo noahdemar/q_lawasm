@@ -1,0 +1,20 @@
+{
+  "name": "kosmos-wasm",
+  "version": "1.0.0",
+  "description": "Interactive Petropoulos Q-law low-thrust orbital transfer demonstrator",
+  "scripts": {
+    "test": "npm run asbuild:release && node tests.mjs",
+    "asbuild:debug": "asc assembly/index.ts --target debug",
+    "asbuild:release": "asc assembly/index.ts --target release",
+    "asbuild": "npm run asbuild:debug && npm run asbuild:release",
+    "build:site": "npm run asbuild:release && node scripts/build-site.mjs",
+    "start": "node scripts/serve.mjs"
+  },
+  "keywords": ["astrodynamics", "q-law", "webassembly", "orbital-mechanics"],
+  "author": "Noah DeMar",
+  "license": "MIT",
+  "devDependencies": {
+    "assemblyscript": "^0.28.9"
+  },
+  "type": "module"
+}

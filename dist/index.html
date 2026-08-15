@@ -1,0 +1,1284 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Interactive Petropoulos Q-law low-thrust orbital transfer demonstrator powered by WebAssembly.">
+    <title>ΚΟΣΜΟΣ — Q-Law Orbital Transfer</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        :root {
+            --parchment: #f4f1e8;
+            --ink: #2a2520;
+            --faded: #8a8478;
+            --gold: #c4a962;
+            --terracotta: #c45c3e;
+            --aegean: #3d6b7d;
+            --marble: #e8e4dc;
+            --shadow: rgba(42,37,32,0.08);
+        }
+
+        html, body { height: 100%; overflow: hidden; }
+
+        body {
+            font-family: Arial, Helvetica, sans-serif;
+            background: var(--parchment);
+            color: var(--ink);
+            display: grid;
+            grid-template-columns: 380px 1fr;
+        }
+
+        .panel {
+            background: var(--parchment);
+            border-right: 1px solid var(--gold);
+            padding: 24px 20px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .header {
+            text-align: center;
+            padding-bottom: 20px;
+            border-bottom: 1px solid var(--gold);
+        }
+
+        .title {
+            font-size: 28px;
+            font-weight: 400;
+            letter-spacing: 0.15em;
+            color: var(--ink);
+            margin-bottom: 4px;
+        }
+
+        .subtitle {
+            font-size: 12px;
+            font-style: italic;
+            color: var(--faded);
+            letter-spacing: 0.05em;
+        }
+
+        .model-note {
+            margin-top: 10px;
+            font-size: 10px;
+            line-height: 1.45;
+            color: var(--faded);
+        }
+
+        .section {
+            border: 1px solid var(--gold);
+            padding: 14px 16px;
+            position: relative;
+        }
+
+        .section::before {
+            content: '';
+            position: absolute;
+            top: -1px; left: -1px; right: -1px; bottom: -1px;
+            border: 1px solid transparent;
+            background: linear-gradient(135deg, var(--gold) 0%, transparent 30%, transparent 70%, var(--gold) 100%) border-box;
+            -webkit-mask: linear-gradient(#fff 0 0) padding-box, linear-gradient(#fff 0 0);
+            mask-composite: exclude;
+            pointer-events: none;
+        }
+
+        .section-title {
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.2em;
+            color: var(--faded);
+            margin-bottom: 14px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .section-title::before,
+        .section-title::after {
+            content: '✦';
+            font-size: 6px;
+            color: var(--gold);
+        }
+
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+        .grid-3 { grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+
+        .input-group { display: flex; flex-direction: column; gap: 4px; }
+
+        .label {
+            font-size: 10px;
+            font-weight: 500;
+            color: var(--faded);
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            font-family: ui-monospace, 'SFMono-Regular', Consolas, monospace;
+        }
+
+        .input {
+            background: var(--marble);
+            border: 1px solid var(--gold);
+            padding: 8px 10px;
+            font-size: 13px;
+            font-family: Arial, Helvetica, sans-serif;
+            color: var(--ink);
+            transition: all 0.2s;
+            width: 100%;
+        }
+
+        .input:focus {
+            outline: none;
+            border-color: var(--aegean);
+            background: #fff;
+        }
+
+        select.input {
+            cursor: pointer;
+            appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%23c4a962' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 12px center;
+            padding-right: 32px;
+        }
+
+        .btn {
+            padding: 10px 16px;
+            border: 1px solid var(--gold);
+            background: transparent;
+            font-family: Arial, Helvetica, sans-serif;
+            font-size: 13px;
+            font-weight: 500;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            cursor: pointer;
+            transition: all 0.3s;
+            color: var(--ink);
+        }
+
+        .btn:hover {
+            background: var(--gold);
+            color: var(--parchment);
+        }
+
+        .btn:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+
+        .btn-primary {
+            background: var(--ink);
+            color: var(--parchment);
+            border-color: var(--ink);
+        }
+
+        .btn-primary:hover {
+            background: var(--aegean);
+            border-color: var(--aegean);
+        }
+
+        .btn-row { display: flex; gap: 10px; }
+        .btn-row .btn { flex: 1; }
+
+        .status {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-style: italic;
+            color: var(--faded);
+            font-size: 14px;
+        }
+
+        .status-dot {
+            width: 8px; height: 8px;
+            border-radius: 50%;
+            background: var(--faded);
+        }
+
+        .status-dot.running { background: var(--aegean); animation: pulse 1.5s infinite; }
+        .status-dot.complete { background: var(--gold); }
+        .status-dot.error { background: var(--terracotta); }
+
+        @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
+
+        .progress {
+            height: 2px;
+            background: var(--marble);
+            margin-top: 12px;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: var(--gold);
+            transition: width 0.2s;
+            width: 0%;
+        }
+
+        .progress-info {
+            display: flex;
+            justify-content: space-between;
+            font-size: 11px;
+            color: var(--faded);
+            margin-top: 8px;
+            font-family: ui-monospace, 'SFMono-Regular', Consolas, monospace;
+        }
+
+        .results {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+        }
+
+        .result {
+            text-align: center;
+            padding: 10px;
+            border: 1px solid var(--gold);
+        }
+
+        .result-label {
+            font-size: 9px;
+            color: var(--faded);
+            text-transform: uppercase;
+            letter-spacing: 0.15em;
+            margin-bottom: 6px;
+        }
+
+        .result-value {
+            font-family: ui-monospace, 'SFMono-Regular', Consolas, monospace;
+            font-size: 14px;
+            color: var(--aegean);
+        }
+
+        .animation-controls {
+            display: none;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .animation-controls.active {
+            display: flex;
+        }
+
+        .slider-container {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .slider {
+            width: 100%;
+            height: 4px;
+            background: var(--marble);
+            border: 1px solid var(--gold);
+            outline: none;
+            -webkit-appearance: none;
+            appearance: none;
+            cursor: pointer;
+        }
+
+        .slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 16px;
+            height: 16px;
+            background: var(--gold);
+            border: 1px solid var(--ink);
+            cursor: pointer;
+            border-radius: 50%;
+        }
+
+        .slider::-moz-range-thumb {
+            width: 16px;
+            height: 16px;
+            background: var(--gold);
+            border: 1px solid var(--ink);
+            cursor: pointer;
+            border-radius: 50%;
+        }
+
+        .playback-controls {
+            display: flex;
+            gap: 8px;
+        }
+
+        .play-btn {
+            flex: 1;
+            padding: 8px;
+            font-size: 12px;
+        }
+
+        .time-display {
+            font-family: ui-monospace, 'SFMono-Regular', Consolas, monospace;
+            font-size: 11px;
+            color: var(--faded);
+            text-align: center;
+        }
+
+        .viz {
+            position: relative;
+            background: #0a0c10;
+            overflow: hidden;
+        }
+
+        #canvas { width: 100%; height: 100%; display: block; touch-action: none; }
+
+        .legend {
+            position: absolute;
+            top: 20px; left: 20px;
+            background: rgba(244,241,232,0.95);
+            border: 1px solid var(--gold);
+            padding: 16px 20px;
+        }
+
+        .legend-title {
+            font-size: 10px;
+            color: var(--faded);
+            text-transform: uppercase;
+            letter-spacing: 0.2em;
+            margin-bottom: 12px;
+            text-align: center;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-size: 13px;
+            margin-bottom: 8px;
+            font-style: italic;
+        }
+
+        .legend-color {
+            width: 24px; height: 2px;
+        }
+
+        .c-initial { background: #3d6b7d; }
+        .c-target { background: #994d80; }
+        .c-traj { background: linear-gradient(90deg, #66b3ff, #994d80); }
+        .c-imp { background: #ff4d4d; }
+        .c-earth { background: linear-gradient(90deg, #3d6b7d, #4a7c59); width: 12px; height: 12px; border-radius: 50%; }
+
+        .adv-only { display: none; }
+        .adv-enabled .legend-item.adv-only { display: flex; }
+        .adv-enabled .result.adv-only { display: block; }
+
+        .result-value.impulsive { color: #ff4d4d; }
+
+        .info-bar {
+            position: absolute;
+            bottom: 20px; left: 20px; right: 20px;
+            background: rgba(244,241,232,0.95);
+            border: 1px solid var(--gold);
+            padding: 14px 24px;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .info-item { text-align: center; }
+
+        .info-label {
+            font-size: 9px;
+            color: var(--faded);
+            text-transform: uppercase;
+            letter-spacing: 0.15em;
+            margin-bottom: 4px;
+        }
+
+        .info-value {
+            font-family: ui-monospace, 'SFMono-Regular', Consolas, monospace;
+            font-size: 13px;
+            color: var(--ink);
+        }
+
+        .info-value.hl { color: var(--aegean); }
+
+        .corner-ornament {
+            position: absolute;
+            width: 40px; height: 40px;
+            border: 1px solid var(--gold);
+            pointer-events: none;
+        }
+
+        .corner-ornament.tl { top: 8px; left: 8px; border-right: none; border-bottom: none; }
+        .corner-ornament.tr { top: 8px; right: 8px; border-left: none; border-bottom: none; }
+        .corner-ornament.bl { bottom: 8px; left: 8px; border-right: none; border-top: none; }
+        .corner-ornament.br { bottom: 8px; right: 8px; border-left: none; border-top: none; }
+
+        .greek-border {
+            position: absolute;
+            top: 0; left: 0; right: 0;
+            height: 3px;
+            background: repeating-linear-gradient(
+                90deg,
+                var(--gold) 0px, var(--gold) 8px,
+                transparent 8px, transparent 12px,
+                var(--gold) 12px, var(--gold) 20px,
+                transparent 20px, transparent 24px
+            );
+        }
+
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: var(--marble); }
+        ::-webkit-scrollbar-thumb { background: var(--gold); }
+
+        @media (max-width: 820px) {
+            html, body { height: auto; min-height: 100%; overflow: auto; }
+            body { display: flex; flex-direction: column; }
+            .panel { order: 2; border-right: 0; border-top: 1px solid var(--gold); overflow: visible; }
+            .viz { order: 1; min-height: 62vh; }
+            .legend { top: 14px; left: 14px; padding: 12px 14px; }
+            .info-bar { left: 14px; right: 14px; bottom: 14px; padding: 10px; gap: 12px; overflow-x: auto; }
+            .info-item { min-width: 76px; }
+        }
+    </style>
+</head>
+<body>
+    <aside class="panel">
+        <header class="header">
+            <div class="title">ΚΟΣΜΟΣ</div>
+            <div class="subtitle">Q-Law Orbital Transfer</div>
+            <p class="model-note">Two-body preliminary design model. Classical-element Q-law is singular near circular and equatorial orbits; results require independent validation.</p>
+        </header>
+
+        <section class="section">
+            <div class="section-title">Mission</div>
+            <select class="input" id="preset" style="width:100%">
+                <option value="leo-geo">(LEO→GEO)</option>
+                <option value="gto-geo">(GTO→GEO)</option>
+                <option value="molniya">(Molniya)</option>
+                <option value="plane">(Plane Change)</option>
+                <option value="custom">(Custom)</option>
+            </select>
+        </section>
+
+        <section class="section">
+            <div class="section-title">Origin Orbit</div>
+            <div class="grid grid-3">
+                <div class="input-group">
+                    <label class="label">a (km)</label>
+                    <input type="number" class="input" id="a0" value="7000">
+                </div>
+                <div class="input-group">
+                    <label class="label">e</label>
+                    <input type="number" class="input" id="e0" value="0.01" step="0.01">
+                </div>
+                <div class="input-group">
+                    <label class="label">i (°)</label>
+                    <input type="number" class="input" id="i0" value="28.5">
+                </div>
+                <div class="input-group">
+                    <label class="label">Ω (°)</label>
+                    <input type="number" class="input" id="raan0" value="0">
+                </div>
+                <div class="input-group">
+                    <label class="label">ω (°)</label>
+                    <input type="number" class="input" id="aop0" value="0">
+                </div>
+                <div class="input-group">
+                    <label class="label">ν (°)</label>
+                    <input type="number" class="input" id="ta0" value="0">
+                </div>
+            </div>
+        </section>
+
+        <section class="section">
+            <div class="section-title">Destination</div>
+            <div class="grid grid-3">
+                <div class="input-group">
+                    <label class="label">a (km)</label>
+                    <input type="number" class="input" id="aT" value="42164">
+                </div>
+                <div class="input-group">
+                    <label class="label">e</label>
+                    <input type="number" class="input" id="eT" value="0.001" step="0.01">
+                </div>
+                <div class="input-group">
+                    <label class="label">i (°)</label>
+                    <input type="number" class="input" id="iT" value="0">
+                </div>
+                <div class="input-group">
+                    <label class="label">Ω (°)</label>
+                    <input type="number" class="input" id="raanT" value="0">
+                </div>
+                <div class="input-group">
+                    <label class="label">ω (°)</label>
+                    <input type="number" class="input" id="aopT" value="0">
+                </div>
+            </div>
+        </section>
+
+        <section class="section">
+            <div class="section-title">Vessel</div>
+            <div class="grid">
+                <div class="input-group">
+                    <label class="label">Mass (kg)</label>
+                    <input type="number" class="input" id="mass" value="1000">
+                </div>
+                <div class="input-group">
+                    <label class="label">Thrust (N)</label>
+                    <input type="number" class="input" id="thrust" value="0.5" step="0.1">
+                </div>
+                <div class="input-group">
+                    <label class="label">Isp (s)</label>
+                    <input type="number" class="input" id="isp" value="3000">
+                </div>
+                <div class="input-group">
+                    <label class="label">Days</label>
+                    <input type="number" class="input" id="tmax" value="180">
+                </div>
+            </div>
+        </section>
+
+        <section class="section">
+            <div class="section-title">Weights</div>
+            <div class="grid grid-3">
+                <div class="input-group">
+                    <label class="label">Wₐ</label>
+                    <input type="number" class="input" id="wa" value="1" step="0.1">
+                </div>
+                <div class="input-group">
+                    <label class="label">Wₑ</label>
+                    <input type="number" class="input" id="we" value="1" step="0.1">
+                </div>
+                <div class="input-group">
+                    <label class="label">Wᵢ</label>
+                    <input type="number" class="input" id="wi" value="1" step="0.1">
+                </div>
+                <div class="input-group">
+                    <label class="label">W_Ω</label>
+                    <input type="number" class="input" id="wraan" value="1" step="0.1">
+                </div>
+                <div class="input-group">
+                    <label class="label">W_ω</label>
+                    <input type="number" class="input" id="waop" value="0" step="0.1">
+                </div>
+            </div>
+        </section>
+
+        <div class="btn-row">
+            <button class="btn btn-primary" id="runBtn" disabled>Calculate</button>
+            <button class="btn" id="resetBtn">Clear</button>
+        </div>
+
+        <section class="section">
+            <div class="status" role="status" aria-live="polite">
+                <div class="status-dot" id="statusDot"></div>
+                <span id="statusText">Awaiting command</span>
+            </div>
+            <div class="progress"><div class="progress-fill" id="progressFill"></div></div>
+            <div class="progress-info">
+                <span id="progressTime">T = 0</span>
+                <span id="progressPct">0%</span>
+            </div>
+        </section>
+
+        <section class="section">
+            <div class="section-title">Results</div>
+            <div class="results">
+                <div class="result">
+                    <div class="result-label">Duration</div>
+                    <div class="result-value" id="resTime">—</div>
+                </div>
+                <div class="result">
+                    <div class="result-label">Δv</div>
+                    <div class="result-value" id="resDv">—</div>
+                </div>
+                <div class="result adv-only">
+                    <div class="result-label">Δv Impulsive</div>
+                    <div class="result-value impulsive" id="resDvImp">—</div>
+                </div>
+                <div class="result adv-only">
+                    <div class="result-label">Fuel Impulsive</div>
+                    <div class="result-value impulsive" id="resFuelImp">—</div>
+                </div>
+                <div class="result">
+                    <div class="result-label">Fuel (low thrust)</div>
+                    <div class="result-value" id="resFuel">—</div>
+                </div>
+                <div class="result">
+                    <div class="result-label">Orbits</div>
+                    <div class="result-value" id="resRevs">—</div>
+                </div>
+            </div>
+        </section>
+
+        <section class="section">
+            <div class="section-title">Advanced</div>
+            <label class="label" style="display:flex; align-items:center; gap:8px; cursor:pointer; user-select:none;">
+                <input type="checkbox" id="advImpulsive">
+                Impulsive comparison
+            </label>
+        </section>
+
+        <section class="section">
+            <div class="section-title">Animation</div>
+            <select class="input" id="animationMode" style="width:100%">
+                <option value="off">Animation Off</option>
+                <option value="slider">Time Slider</option>
+                <option value="play">Auto Play</option>
+            </select>
+
+            <div class="animation-controls" id="animationControls">
+                <div class="slider-container">
+                    <input type="range" class="slider" id="timeSlider" min="0" max="100" value="0">
+                    <div class="time-display" id="sliderTime">T = 0.0 days</div>
+                </div>
+                <div class="playback-controls">
+                    <button class="btn play-btn" id="playBtn">Play</button>
+                    <button class="btn play-btn" id="pauseBtn">Pause</button>
+                    <button class="btn play-btn" id="resetBtnAnim">Reset</button>
+                </div>
+            </div>
+        </section>
+    </aside>
+
+    <main class="viz">
+        <div class="greek-border"></div>
+        <div class="corner-ornament tl"></div>
+        <div class="corner-ornament tr"></div>
+        <div class="corner-ornament bl"></div>
+        <div class="corner-ornament br"></div>
+
+        <canvas id="canvas" aria-label="Interactive three-dimensional Earth and orbital transfer visualization"></canvas>
+
+        <div class="legend">
+            <div class="legend-title">Legend</div>
+            <div class="legend-item"><div class="legend-color c-earth"></div>Earth</div>
+            <div class="legend-item"><div class="legend-color c-initial"></div>Origin</div>
+            <div class="legend-item"><div class="legend-color c-target"></div>Destination</div>
+            <div class="legend-item"><div class="legend-color c-traj"></div>Trajectory</div>
+            <div class="legend-item adv-only"><div class="legend-color c-imp"></div>Impulsive</div>
+        </div>
+
+        <div class="info-bar">
+            <div class="info-item">
+                <div class="info-label">Semi-major</div>
+                <div class="info-value hl" id="curA">—</div>
+            </div>
+            <div class="info-item">
+                <div class="info-label">Eccentricity</div>
+                <div class="info-value" id="curE">—</div>
+            </div>
+            <div class="info-item">
+                <div class="info-label">Inclination</div>
+                <div class="info-value" id="curI">—</div>
+            </div>
+            <div class="info-item">
+                <div class="info-label">Altitude</div>
+                <div class="info-value" id="curAlt">—</div>
+            </div>
+            <div class="info-item">
+                <div class="info-label">Velocity</div>
+                <div class="info-value" id="curV">—</div>
+            </div>
+            <div class="info-item">
+                <div class="info-label">ΔV Used</div>
+                <div class="info-value" id="curDv">—</div>
+            </div>
+            <div class="info-item">
+                <div class="info-label">Status</div>
+                <div class="info-value hl" id="curStatus">Idle</div>
+            </div>
+        </div>
+    </main>
+
+<script src="qlaw-wasm.js"></script>
+<script>
+const MU = 398600.4418, RE = 6378.137, G0 = 9.80665e-3;
+const DEG = Math.PI/180, DAY = 86400;
+
+class Viz {
+    constructor(canvas) {
+        this.canvas = canvas;
+        this.gl = canvas.getContext('webgl2') || canvas.getContext('webgl');
+        if(!this.gl) return;
+
+        this.TEXTURE_LON_OFFSET = 90;
+
+        this.resize();
+        window.addEventListener('resize', () => this.resize());
+
+        this.camD = 80000; this.camT = 0.5; this.camP = 0.8;
+        this.drag = false; this.lastM = [0,0];
+        this.initMouse();
+        this.initGL();
+        this.loadEarthTexture();
+        this.animate();
+    }
+
+    resize() {
+        const r = this.canvas.parentElement.getBoundingClientRect();
+        const scale = Math.min(window.devicePixelRatio || 1, 2);
+        this.canvas.width = Math.max(1, Math.round(r.width * scale));
+        this.canvas.height = Math.max(1, Math.round(r.height * scale));
+        this.canvas.style.width = r.width + 'px';
+        this.canvas.style.height = r.height + 'px';
+        if(this.gl) this.gl.viewport(0, 0, this.canvas.width, this.canvas.height);
+    }
+
+    initMouse() {
+        this.canvas.addEventListener('pointerdown', e => {
+            this.drag = true;
+            this.lastM = [e.clientX, e.clientY];
+            this.canvas.setPointerCapture(e.pointerId);
+        });
+        this.canvas.addEventListener('pointermove', e => {
+            if(!this.drag) return;
+            this.camT -= (e.clientX - this.lastM[0]) * 0.005;
+            this.camP = Math.max(0.1, Math.min(Math.PI-0.1, this.camP - (e.clientY - this.lastM[1]) * 0.005));
+            this.lastM = [e.clientX, e.clientY];
+        });
+        this.canvas.addEventListener('pointerup', () => this.drag = false);
+        this.canvas.addEventListener('pointercancel', () => this.drag = false);
+        this.canvas.addEventListener('wheel', e => {
+            e.preventDefault();
+            this.camD = Math.max(10000, Math.min(200000, this.camD * (1 + e.deltaY * 0.001)));
+        });
+    }
+
+    initGL() {
+        const gl = this.gl;
+
+        const vsLine = `attribute vec3 aP,aC; uniform mat4 uP,uV; varying vec3 vC;
+            void main(){gl_Position=uP*uV*vec4(aP,1.);gl_PointSize=6.;vC=aC;}`;
+        const fsLine = `precision mediump float; varying vec3 vC; void main(){gl_FragColor=vec4(vC,1.);}`;
+
+        const compile = (t,s) => {
+            const sh = gl.createShader(t);
+            gl.shaderSource(sh, s);
+            gl.compileShader(sh);
+            if (!gl.getShaderParameter(sh, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(sh));
+            return sh;
+        };
+        this.lineProg = gl.createProgram();
+        gl.attachShader(this.lineProg, compile(gl.VERTEX_SHADER, vsLine));
+        gl.attachShader(this.lineProg, compile(gl.FRAGMENT_SHADER, fsLine));
+        gl.linkProgram(this.lineProg);
+
+        this.lineAP = gl.getAttribLocation(this.lineProg, 'aP');
+        this.lineAC = gl.getAttribLocation(this.lineProg, 'aC');
+        this.lineUP = gl.getUniformLocation(this.lineProg, 'uP');
+        this.lineUV = gl.getUniformLocation(this.lineProg, 'uV');
+
+        const vsEarth = `
+            attribute vec3 aPos; attribute vec2 aUV; uniform mat4 uP, uV, uM;
+            varying vec2 vUV; varying vec3 vNorm; varying vec3 vWorld;
+            void main() {
+                vec4 world = uM * vec4(aPos, 1.0);
+                gl_Position = uP * uV * world;
+                vUV = aUV;
+                vNorm = normalize((uM * vec4(aPos, 0.0)).xyz);
+                vWorld = world.xyz;
+            }`;
+        const fsEarth = `
+            precision highp float; varying vec2 vUV; varying vec3 vNorm; varying vec3 vWorld;
+            uniform sampler2D uTex; uniform int uHasTex; uniform vec3 uCamera;
+            void main() {
+                vec3 n = normalize(vNorm);
+                vec3 light = normalize(vec3(1.0, -0.35, 0.55));
+                vec3 view = normalize(uCamera - vWorld);
+                float diffuse = max(dot(n, light), 0.0);
+                float night = smoothstep(-0.18, 0.18, dot(n, light));
+                vec3 albedo = uHasTex == 1 ? texture2D(uTex, vUV).rgb : vec3(0.025, 0.08, 0.14);
+                float ocean = smoothstep(0.06, 0.32, albedo.b - albedo.r);
+                vec3 halfVector = normalize(light + view);
+                float specular = pow(max(dot(n, halfVector), 0.0), 72.0) * ocean * 0.45;
+                float fresnel = pow(1.0 - max(dot(n, view), 0.0), 3.0);
+                vec3 lit = albedo * (0.16 + 0.84 * diffuse) * mix(0.42, 1.0, night);
+                lit += vec3(specular) + vec3(0.08, 0.32, 0.72) * fresnel * (0.28 + 0.72 * night);
+                gl_FragColor = vec4(pow(lit, vec3(0.9)), 1.0);
+            }`;
+
+        this.earthProg = gl.createProgram();
+        gl.attachShader(this.earthProg, compile(gl.VERTEX_SHADER, vsEarth));
+        gl.attachShader(this.earthProg, compile(gl.FRAGMENT_SHADER, fsEarth));
+        gl.linkProgram(this.earthProg);
+
+        this.earthAPos = gl.getAttribLocation(this.earthProg, 'aPos');
+        this.earthAUV = gl.getAttribLocation(this.earthProg, 'aUV');
+        this.earthUP = gl.getUniformLocation(this.earthProg, 'uP');
+        this.earthUV = gl.getUniformLocation(this.earthProg, 'uV');
+        this.earthUM = gl.getUniformLocation(this.earthProg, 'uM');
+        this.earthUTex = gl.getUniformLocation(this.earthProg, 'uTex');
+        this.earthUHasTex = gl.getUniformLocation(this.earthProg, 'uHasTex');
+        this.earthUCamera = gl.getUniformLocation(this.earthProg, 'uCamera');
+
+        this.posBuf = gl.createBuffer();
+        this.colBuf = gl.createBuffer();
+        this.createEarthGeometry();
+    }
+
+    createEarthGeometry() {
+        const gl = this.gl, latBands = 48, lonBands = 64;
+        const verts = [], uvs = [], indices = [];
+
+        for(let lat = 0; lat <= latBands; lat++) {
+            const theta = lat * Math.PI / latBands, sinT = Math.sin(theta), cosT = Math.cos(theta);
+            for(let lon = 0; lon <= lonBands; lon++) {
+                const phi = lon * 2 * Math.PI / lonBands, sinP = Math.sin(phi), cosP = Math.cos(phi);
+                verts.push(sinP * sinT * RE, cosP * sinT * RE, -cosT * RE);
+                const offsetU = 1 - ((lon / lonBands * 360 + this.TEXTURE_LON_OFFSET) % 360) / 360;
+                uvs.push(offsetU, lat / latBands);
+            }
+        }
+        for(let lat = 0; lat < latBands; lat++) {
+            for(let lon = 0; lon < lonBands; lon++) {
+                const first = lat * (lonBands + 1) + lon, second = first + lonBands + 1;
+                indices.push(first, second, first + 1, second, second + 1, first + 1);
+            }
+        }
+
+        this.earthVerts = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, this.earthVerts);
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(verts), gl.STATIC_DRAW);
+
+        this.earthUVs = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, this.earthUVs);
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(uvs), gl.STATIC_DRAW);
+
+        this.earthIndices = gl.createBuffer();
+        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.earthIndices);
+        gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(indices), gl.STATIC_DRAW);
+        this.earthIndexCount = indices.length;
+    }
+
+    loadEarthTexture() {
+        const gl = this.gl;
+        this.earthTex = gl.createTexture();
+        gl.bindTexture(gl.TEXTURE_2D, this.earthTex);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array([18, 52, 86, 255]));
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+        this.texLoaded = false;
+
+        const image = new Image();
+        image.crossOrigin = 'anonymous';
+        image.decoding = 'async';
+        image.onload = () => {
+            gl.bindTexture(gl.TEXTURE_2D, this.earthTex);
+            gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+            gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, image);
+            gl.generateMipmap(gl.TEXTURE_2D);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
+            this.texLoaded = true;
+        };
+        image.onerror = () => console.error('Failed to load the Earth texture CDN asset');
+        image.src = 'https://cdn.jsdelivr.net/npm/three-globe@2.31.1/example/img/earth-blue-marble.jpg';
+    }
+
+    orbitPts(oe, n=100) {
+        const [a,e,i,W,w] = oe, pts = [];
+        for(let j=0; j<=n; j++) {
+            const f = j/n*2*Math.PI, p = a*(1-e*e), r = p/(1+e*Math.cos(f));
+            const xo = r*Math.cos(f), yo = r*Math.sin(f);
+            const cW=Math.cos(W), sW=Math.sin(W), cw=Math.cos(w), sw=Math.sin(w), ci=Math.cos(i), si=Math.sin(i);
+            pts.push((cW*cw-sW*sw*ci)*xo + (-cW*sw-sW*cw*ci)*yo,
+                     (sW*cw+cW*sw*ci)*xo + (-sW*sw+cW*cw*ci)*yo,
+                     (sw*si)*xo + (cw*si)*yo);
+        }
+        return pts;
+    }
+
+    draw(pts, col, mode) {
+        const gl = this.gl, colors = [];
+        for(let j=0; j<pts.length/3; j++) colors.push(...col);
+        gl.bindBuffer(gl.ARRAY_BUFFER, this.posBuf);
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(pts), gl.STATIC_DRAW);
+        gl.enableVertexAttribArray(this.lineAP);
+        gl.vertexAttribPointer(this.lineAP, 3, gl.FLOAT, false, 0, 0);
+        gl.bindBuffer(gl.ARRAY_BUFFER, this.colBuf);
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(colors), gl.STATIC_DRAW);
+        gl.enableVertexAttribArray(this.lineAC);
+        gl.vertexAttribPointer(this.lineAC, 3, gl.FLOAT, false, 0, 0);
+        gl.drawArrays(mode, 0, pts.length/3);
+    }
+
+    drawEarth(proj, view, eye) {
+        const gl = this.gl;
+        gl.useProgram(this.earthProg);
+        gl.uniformMatrix4fv(this.earthUP, false, proj);
+        gl.uniformMatrix4fv(this.earthUV, false, view);
+        gl.uniform3fv(this.earthUCamera, eye);
+        const t = Date.now() * 0.00005, c = Math.cos(t), s = Math.sin(t);
+        gl.uniformMatrix4fv(this.earthUM, false, new Float32Array([c,-s,0,0, s,c,0,0, 0,0,1,0, 0,0,0,1]));
+        gl.activeTexture(gl.TEXTURE0);
+        gl.bindTexture(gl.TEXTURE_2D, this.earthTex);
+        gl.uniform1i(this.earthUTex, 0);
+        gl.uniform1i(this.earthUHasTex, this.texLoaded ? 1 : 0);
+        gl.bindBuffer(gl.ARRAY_BUFFER, this.earthVerts);
+        gl.enableVertexAttribArray(this.earthAPos);
+        gl.vertexAttribPointer(this.earthAPos, 3, gl.FLOAT, false, 0, 0);
+        gl.bindBuffer(gl.ARRAY_BUFFER, this.earthUVs);
+        gl.enableVertexAttribArray(this.earthAUV);
+        gl.vertexAttribPointer(this.earthAUV, 2, gl.FLOAT, false, 0, 0);
+        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.earthIndices);
+        gl.drawElements(gl.TRIANGLES, this.earthIndexCount, gl.UNSIGNED_SHORT, 0);
+    }
+
+    perspective(fov, asp, n, f) {
+        const t = 1/Math.tan(fov/2);
+        return new Float32Array([t/asp,0,0,0, 0,t,0,0, 0,0,(f+n)/(n-f),-1, 0,0,2*f*n/(n-f),0]);
+    }
+
+    lookAt(eye, tgt, up) {
+        const z = [eye[0]-tgt[0], eye[1]-tgt[1], eye[2]-tgt[2]];
+        const zl = Math.sqrt(z[0]*z[0]+z[1]*z[1]+z[2]*z[2]);
+        z[0]/=zl; z[1]/=zl; z[2]/=zl;
+        const x = [up[1]*z[2]-up[2]*z[1], up[2]*z[0]-up[0]*z[2], up[0]*z[1]-up[1]*z[0]];
+        const xl = Math.sqrt(x[0]*x[0]+x[1]*x[1]+x[2]*x[2]);
+        x[0]/=xl; x[1]/=xl; x[2]/=xl;
+        const y = [z[1]*x[2]-z[2]*x[1], z[2]*x[0]-z[0]*x[2], z[0]*x[1]-z[1]*x[0]];
+        return new Float32Array([x[0],y[0],z[0],0, x[1],y[1],z[1],0, x[2],y[2],z[2],0,
+            -(x[0]*eye[0]+x[1]*eye[1]+x[2]*eye[2]),-(y[0]*eye[0]+y[1]*eye[1]+y[2]*eye[2]),-(z[0]*eye[0]+z[1]*eye[1]+z[2]*eye[2]), 1]);
+    }
+
+    animate() {
+        const gl = this.gl;
+        if(!gl) return;
+        gl.clearColor(0.02, 0.03, 0.05, 1);
+        gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+        gl.enable(gl.DEPTH_TEST);
+
+        const asp = this.canvas.width / this.canvas.height;
+        const proj = this.perspective(Math.PI/4, asp, 100, 500000);
+        const eye = [this.camD * Math.sin(this.camP) * Math.cos(this.camT),
+                     this.camD * Math.sin(this.camP) * Math.sin(this.camT),
+                     this.camD * Math.cos(this.camP)];
+        const view = this.lookAt(eye, [0,0,0], [0,0,1]);
+
+        this.drawEarth(proj, view, eye);
+        gl.useProgram(this.lineProg);
+        gl.uniformMatrix4fv(this.lineUP, false, proj);
+        gl.uniformMatrix4fv(this.lineUV, false, view);
+
+        if(this.oe0) this.draw(this.orbitPts(this.oe0), [0.24, 0.42, 0.49], gl.LINE_STRIP);
+        if(this.oeT) this.draw(this.orbitPts(this.oeT), [0.6, 0.3, 0.8], gl.LINE_STRIP);
+        if(this.impOE) this.draw(this.orbitPts(this.impOE), [1.0, 0.85, 0.2], gl.LINE_STRIP);
+
+        if(this.traj && this.traj.length > 1) {
+            const pts = this.traj.flatMap(t => t.r), cols = [];
+            for(let j=0; j<this.traj.length; j++) {
+                const t = j / this.traj.length;
+                cols.push(0.4 + t * 0.2, 0.7 - t * 0.4, 1.0 - t * 0.3);
+            }
+            gl.bindBuffer(gl.ARRAY_BUFFER, this.posBuf);
+            gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(pts), gl.STATIC_DRAW);
+            gl.enableVertexAttribArray(this.lineAP);
+            gl.vertexAttribPointer(this.lineAP, 3, gl.FLOAT, false, 0, 0);
+            gl.bindBuffer(gl.ARRAY_BUFFER, this.colBuf);
+            gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(cols), gl.STATIC_DRAW);
+            gl.enableVertexAttribArray(this.lineAC);
+            gl.vertexAttribPointer(this.lineAC, 3, gl.FLOAT, false, 0, 0);
+            gl.drawArrays(gl.LINE_STRIP, 0, this.traj.length);
+        }
+
+        if(this.pos) this.draw(this.pos, [0.77, 0.65, 0.38], gl.POINTS);
+        requestAnimationFrame(() => this.animate());
+    }
+}
+
+class App {
+    constructor() {
+        this.viz = new Viz(document.getElementById('canvas'));
+        this.running = false;
+        this.advancedImpulsive = false;
+        this.animationMode = 'off';
+        this.animationIndex = 0;
+        this.isPlaying = false;
+        this.animationTimer = null;
+        this.trajectory = null;
+        this.initPresets();
+        this.initUI();
+        this.loadPreset('leo-geo');
+        this.initWasm();
+    }
+
+    async initWasm() {
+        const ok = await QLawWASM.load('build/release.wasm');
+        document.getElementById('runBtn').disabled = !ok;
+        this.setStatus(ok ? '' : 'error', ok ? 'WASM ready' : 'WASM failed to load');
+    }
+
+    initPresets() {
+        this.presets = {
+            'leo-geo': { oe0:[7000,0.01,28.5,0,0,0], oeT:[42164,0.001,0,0,0], mass:1000, thrust:0.5, isp:3000, tmax:180, w:[1,1,1,0,0] },
+            'gto-geo': { oe0:[24500,0.7,7,0,0,0], oeT:[42164,0.001,0,0,0], mass:2000, thrust:1.0, isp:2500, tmax:120, w:[1,1,1,0,0] },
+            'molniya': { oe0:[7000,0.01,28.5,0,0,0], oeT:[26600,0.74,63.4,0,270], mass:1500, thrust:0.8, isp:3000, tmax:150, w:[1,1,1,0,1] },
+            'plane': { oe0:[7000,0.001,28.5,0,0,0], oeT:[7000,0.001,51.6,0,0], mass:500, thrust:0.3, isp:3500, tmax:120, w:[0.1,0.1,1,0,0] },
+            'custom': { oe0:[7000,0.01,28.5,0,0,0], oeT:[42164,0.001,0,0,0], mass:1000, thrust:0.5, isp:3000, tmax:180, w:[1,1,1,1,0] }
+        };
+    }
+
+    loadPreset(name) {
+        const p = this.presets[name]; if(!p) return;
+        document.getElementById('a0').value = p.oe0[0];
+        document.getElementById('e0').value = p.oe0[1];
+        document.getElementById('i0').value = p.oe0[2];
+        document.getElementById('raan0').value = p.oe0[3];
+        document.getElementById('aop0').value = p.oe0[4];
+        document.getElementById('ta0').value = p.oe0[5];
+        document.getElementById('aT').value = p.oeT[0];
+        document.getElementById('eT').value = p.oeT[1];
+        document.getElementById('iT').value = p.oeT[2];
+        document.getElementById('raanT').value = p.oeT[3];
+        document.getElementById('aopT').value = p.oeT[4];
+        document.getElementById('mass').value = p.mass;
+        document.getElementById('thrust').value = p.thrust;
+        document.getElementById('isp').value = p.isp;
+        document.getElementById('tmax').value = p.tmax;
+        document.getElementById('wa').value = p.w[0];
+        document.getElementById('we').value = p.w[1];
+        document.getElementById('wi').value = p.w[2];
+        document.getElementById('wraan').value = p.w[3];
+        document.getElementById('waop').value = p.w[4];
+        this.updateViz();
+    }
+
+    getInputs() {
+        return {
+            oe0: [+document.getElementById('a0').value, +document.getElementById('e0').value,
+                  +document.getElementById('i0').value*DEG, +document.getElementById('raan0').value*DEG,
+                  +document.getElementById('aop0').value*DEG, +document.getElementById('ta0').value*DEG],
+            oeT: [+document.getElementById('aT').value, +document.getElementById('eT').value,
+                  +document.getElementById('iT').value*DEG, +document.getElementById('raanT').value*DEG,
+                  +document.getElementById('aopT').value*DEG],
+            mass: +document.getElementById('mass').value,
+            thrust: +document.getElementById('thrust').value,
+            isp: +document.getElementById('isp').value,
+            tMax: +document.getElementById('tmax').value * DAY,
+            weights: [+document.getElementById('wa').value, +document.getElementById('we').value,
+                      +document.getElementById('wi').value, +document.getElementById('wraan').value,
+                      +document.getElementById('waop').value]
+        };
+    }
+
+    updateViz() {
+        const inp = this.getInputs();
+        this.viz.oe0 = inp.oe0.slice(0,5);
+        this.viz.oeT = inp.oeT;
+        if (this.advancedImpulsive) this.updateImpulsiveEstimate();
+    }
+
+    validateInputs(inp) {
+        const values = [...inp.oe0, ...inp.oeT, inp.mass, inp.thrust, inp.isp, inp.tMax, ...inp.weights];
+        if (!values.every(Number.isFinite)) throw new Error('All fields must contain finite numbers');
+        if (inp.mass <= 0 || inp.thrust <= 0 || inp.isp <= 0 || inp.tMax <= 0) throw new Error('Mass, thrust, Isp, and duration must be positive');
+        if (inp.oe0[0] <= 0 || inp.oeT[0] <= 0 || inp.oe0[1] < 0 || inp.oe0[1] >= 0.95 || inp.oeT[1] < 0 || inp.oeT[1] >= 0.95) throw new Error('Use positive semi-major axes and eccentricities from 0 to 0.95');
+        if (inp.oe0[0] * (1 - inp.oe0[1]) <= RE || inp.oeT[0] * (1 - inp.oeT[1]) <= RE) throw new Error('Origin and destination periapsis must remain above Earth');
+        if (inp.weights.some(weight => weight < 0) || !inp.weights.some(weight => weight > 0)) throw new Error('Weights must be non-negative, with at least one active target');
+    }
+
+    setAdvancedImpulsive(enabled) {
+        this.advancedImpulsive = !!enabled;
+        document.body.classList.toggle('adv-enabled', this.advancedImpulsive);
+        this.updateImpulsiveEstimate();
+    }
+
+    updateImpulsiveEstimate() {
+        const outDv = document.getElementById('resDvImp');
+        const outFuel = document.getElementById('resFuelImp');
+        if (!this.advancedImpulsive) {
+            if (this.viz) this.viz.impOE = null;
+            if (outDv) outDv.textContent = '—';
+            if (outFuel) outFuel.textContent = '—';
+            return;
+        }
+        const inp = this.getInputs();
+        const r1 = inp.oe0[0], r2 = inp.oeT[0];
+        if (!(r1 > 0) || !(r2 > 0)) return;
+
+        const aTrans = (r1 + r2) / 2;
+        const vPeri = Math.sqrt(MU * (2 / r1 - 1 / aTrans));
+        const vApo = Math.sqrt(MU * (2 / r2 - 1 / aTrans));
+        const dv1 = Math.abs(vPeri - Math.sqrt(MU / r1));
+        const dv2 = Math.abs(Math.sqrt(MU / r2) - vApo);
+        const dO = inp.oeT[3] - inp.oe0[3];
+        let cosSig = Math.cos(inp.oe0[2]) * Math.cos(inp.oeT[2]) + Math.sin(inp.oe0[2]) * Math.sin(inp.oeT[2]) * Math.cos(dO);
+        const dSig = Math.acos(Math.max(-1, Math.min(1, cosSig)));
+        const dvPlane = 2 * vApo * Math.sin(dSig / 2);
+        const dvTotal = dv1 + Math.sqrt(dv2 * dv2 + dvPlane * dvPlane);
+
+        if (outDv) outDv.textContent = (dvTotal * 1000).toFixed(0) + ' m/s';
+        const fuelMass = inp.mass * (1 - Math.exp(-dvTotal / (220 * 0.00980665)));
+        if (outFuel) outFuel.textContent = fuelMass.toFixed(1) + ' kg';
+
+        const eTrans = Math.abs(r2 - r1) / (r1 + r2);
+        if (this.viz) this.viz.impOE = [aTrans, eTrans, inp.oe0[2], inp.oe0[3], inp.oe0[4]];
+    }
+
+    initUI() {
+        document.getElementById('preset').addEventListener('change', e => this.loadPreset(e.target.value));
+        document.getElementById('runBtn').addEventListener('click', () => this.run());
+        document.getElementById('resetBtn').addEventListener('click', () => this.reset());
+        document.querySelectorAll('.input').forEach(el => el.addEventListener('change', () => this.updateViz()));
+        document.getElementById('advImpulsive').addEventListener('change', e => this.setAdvancedImpulsive(e.target.checked));
+        document.getElementById('animationMode').addEventListener('change', e => this.setAnimationMode(e.target.value));
+        document.getElementById('timeSlider').addEventListener('input', e => this.updateTimeFromSlider(e.target.value));
+        document.getElementById('playBtn').addEventListener('click', () => this.playAnimation());
+        document.getElementById('pauseBtn').addEventListener('click', () => this.pauseAnimation());
+        document.getElementById('resetBtnAnim').addEventListener('click', () => this.resetAnimation());
+    }
+
+    setStatus(type, text) {
+        document.getElementById('statusDot').className = 'status-dot ' + type;
+        document.getElementById('statusText').textContent = text;
+    }
+
+    async run() {
+        if(this.running || !QLawWASM.ready) return;
+        const inp = this.getInputs();
+        try {
+            this.validateInputs(inp);
+        } catch (error) {
+            this.setStatus('error', error.message);
+            return;
+        }
+        this.running = true;
+        document.getElementById('runBtn').disabled = true;
+        this.setStatus('running', 'Computing (WASM)...');
+
+        // Initialize WASM Q-Law
+        QLawWASM.init(inp.thrust, inp.mass, inp.isp,
+            inp.oeT[0], inp.oeT[1], inp.oeT[2], inp.oeT[3], inp.oeT[4],
+            inp.weights[0], inp.weights[1], inp.weights[2], inp.weights[3], inp.weights[4],
+            60, inp.tMax);
+
+        await new Promise(r => setTimeout(r, 10));
+
+        // Run Q-Law propagation
+        const res = QLawWASM.run(inp.oe0[0], inp.oe0[1], inp.oe0[2], inp.oe0[3], inp.oe0[4], inp.oe0[5]);
+        if (!res) {
+            this.setStatus('error', 'The WASM solver returned no result');
+            document.getElementById('runBtn').disabled = false;
+            this.running = false;
+            return;
+        }
+
+        this.viz.traj = res.traj;
+        this.trajectory = res.traj;
+        if(res.traj.length > 0) this.viz.pos = res.traj[res.traj.length-1].r;
+
+        document.getElementById('progressFill').style.width = '100%';
+        document.getElementById('progressPct').textContent = '100%';
+        document.getElementById('progressTime').textContent = 'T = '+(res.t/DAY).toFixed(1)+' d';
+
+        if (this.animationMode !== 'off') {
+            document.getElementById('animationControls').classList.add('active');
+            this.resetAnimation();
+            if (this.animationMode === 'play') setTimeout(() => this.playAnimation(), 100);
+        }
+
+        document.getElementById('resTime').textContent = (res.t/DAY).toFixed(1)+' days';
+        document.getElementById('resDv').textContent = (res.dv*1000).toFixed(0)+' m/s';
+        document.getElementById('resFuel').textContent = res.fuel.toFixed(1)+' kg';
+        document.getElementById('resRevs').textContent = res.revs;
+
+        if (this.advancedImpulsive) this.updateImpulsiveEstimate();
+
+        this.setStatus(res.ok ? 'complete' : 'error', res.ok ? 'Journey complete' : 'Time exceeded');
+        document.getElementById('curStatus').textContent = res.ok ? 'Arrived' : 'Timeout';
+
+        if (res.traj.length > 0) {
+            const last = res.traj[res.traj.length - 1];
+            document.getElementById('curA').textContent = last.oe[0].toFixed(0)+' km';
+            document.getElementById('curE').textContent = last.oe[1].toFixed(4);
+            document.getElementById('curI').textContent = (last.oe[2]/DEG).toFixed(2)+'°';
+            const r = last.oe[0]*(1-last.oe[1]*last.oe[1])/(1+last.oe[1]);
+            document.getElementById('curAlt').textContent = (r-RE).toFixed(0)+' km';
+            document.getElementById('curV').textContent = Math.sqrt(MU*(2/r-1/last.oe[0])).toFixed(2)+' km/s';
+        }
+
+        document.getElementById('runBtn').disabled = false;
+        this.running = false;
+    }
+
+    reset() {
+        this.viz.traj = null; this.viz.pos = null; this.trajectory = null;
+        document.getElementById('progressFill').style.width = '0%';
+        document.getElementById('progressPct').textContent = '0%';
+        document.getElementById('progressTime').textContent = 'T = 0';
+        ['resTime','resDv','resDvImp','resFuelImp','resFuel','resRevs','curA','curE','curI','curAlt','curV','curDv'].forEach(id =>
+            document.getElementById(id).textContent = '—');
+        document.getElementById('curStatus').textContent = 'Idle';
+        this.setStatus('', 'Awaiting command');
+        this.updateViz();
+        this.resetAnimation();
+    }
+
+    setAnimationMode(mode) {
+        this.animationMode = mode;
+        const controls = document.getElementById('animationControls');
+        if (mode === 'off') {
+            controls.classList.remove('active');
+            this.pauseAnimation();
+            if (this.trajectory) {
+                this.viz.traj = this.trajectory;
+                this.viz.pos = this.trajectory[this.trajectory.length - 1].r;
+            }
+        } else {
+            controls.classList.add('active');
+            this.resetAnimation();
+            if (mode === 'play') this.playAnimation();
+        }
+    }
+
+    updateTimeFromSlider(value) {
+        if (!this.trajectory) return;
+        const idx = Math.floor((value / 100) * (this.trajectory.length - 1));
+        this.animationIndex = idx;
+        this.renderFrame(idx);
+    }
+
+    renderFrame(idx) {
+        if (!this.trajectory || !this.trajectory[idx]) return;
+        const point = this.trajectory[idx];
+        this.viz.traj = this.trajectory.slice(0, idx + 1);
+        this.viz.pos = point.r;
+        document.getElementById('sliderTime').textContent = `T = ${(point.t / DAY).toFixed(1)} days`;
+        const oe = point.oe;
+        document.getElementById('curA').textContent = oe[0].toFixed(0) + ' km';
+        document.getElementById('curE').textContent = oe[1].toFixed(4);
+        document.getElementById('curI').textContent = (oe[2] / DEG).toFixed(2) + '°';
+        const r = oe[0] * (1 - oe[1] * oe[1]) / (1 + oe[1]);
+        document.getElementById('curAlt').textContent = (r - RE).toFixed(0) + ' km';
+        document.getElementById('curV').textContent = Math.sqrt(MU * (2 / r - 1 / oe[0])).toFixed(2) + ' km/s';
+        document.getElementById('curDv').textContent = (point.dv * 1000).toFixed(0) + ' m/s';
+        document.getElementById('curStatus').textContent = 'Animating';
+    }
+
+    playAnimation() {
+        if (!this.trajectory || this.isPlaying) return;
+        this.isPlaying = true;
+        const animate = () => {
+            if (!this.isPlaying || this.animationMode === 'off') return;
+            this.animationIndex++;
+            if (this.animationIndex >= this.trajectory.length) this.animationIndex = 0;
+            document.getElementById('timeSlider').value = (this.animationIndex / (this.trajectory.length - 1)) * 100;
+            this.renderFrame(this.animationIndex);
+            this.animationTimer = setTimeout(animate, 5);
+        };
+        animate();
+    }
+
+    pauseAnimation() {
+        this.isPlaying = false;
+        if (this.animationTimer) { clearTimeout(this.animationTimer); this.animationTimer = null; }
+    }
+
+    resetAnimation() {
+        this.pauseAnimation();
+        this.animationIndex = 0;
+        document.getElementById('timeSlider').value = 0;
+        if (this.trajectory) this.renderFrame(0);
+    }
+}
+
+document.addEventListener('DOMContentLoaded', () => new App());
+</script>
+</body>
+</html>
