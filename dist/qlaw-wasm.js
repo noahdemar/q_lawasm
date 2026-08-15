@@ -1,11 +1,14 @@
 // WASM Loader for Q-Law module
 // This handles loading and interfacing with the WASM binary
 
+const baseUrl = (typeof document !== 'undefined' && document.currentScript && document.currentScript.src) || (typeof location !== 'undefined' && location.href) || '';
+const defaultWasmPath = () => baseUrl ? new URL('build/release.wasm', baseUrl).toString() : 'build/release.wasm';
+
 const QLawWASM = {
     instance: null,
     ready: false,
 
-    async load(wasmPath = 'build/release.wasm') {
+    async load(wasmPath = defaultWasmPath()) {
         try {
             const response = await fetch(wasmPath);
             if (!response.ok) throw new Error(`WASM request failed (${response.status})`);

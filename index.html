@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="description" content="Interactive Petropoulos Q-law low-thrust orbital transfer demonstrator powered by WebAssembly.">
+    <link rel="icon" href="data:,">
     <title>ΚΟΣΜΟΣ — Q-Law Orbital Transfer</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -819,7 +820,7 @@ class Viz {
             for(let lon = 0; lon <= lonBands; lon++) {
                 const phi = lon * 2 * Math.PI / lonBands, sinP = Math.sin(phi), cosP = Math.cos(phi);
                 verts.push(sinP * sinT * RE, cosP * sinT * RE, -cosT * RE);
-                const offsetU = 1 - ((lon / lonBands * 360 + this.TEXTURE_LON_OFFSET) % 360) / 360;
+                const offsetU = 1 - lon / lonBands - this.TEXTURE_LON_OFFSET / 360;
                 uvs.push(offsetU, lat / latBands);
             }
         }

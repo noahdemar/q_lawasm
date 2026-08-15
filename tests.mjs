@@ -5,7 +5,8 @@ const html = await readFile(new URL('./index.html', import.meta.url), 'utf8');
 const inlineScripts = [...html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/g)].map(match => match[1]).filter(Boolean);
 assert.ok(inlineScripts.length > 0);
 assert.match(html, /cdn\.jsdelivr\.net\/npm\/three-globe@2\.31\.1\/example\/img\/earth-blue-marble\.jpg/);
-assert.doesNotMatch(html, /float noise\(|float terrain\s*=/);
+assert.match(html, /1 - lon \/ lonBands - this\.TEXTURE_LON_OFFSET \/ 360/);
+assert.doesNotMatch(html, /float noise\(|float terrain\s*=|TEXTURE_LON_OFFSET\) % 360/);
 new Function(inlineScripts.at(-1));
 
 const bytes = await readFile(new URL('./build/release.wasm', import.meta.url));
